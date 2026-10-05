@@ -1,12 +1,14 @@
 // Typed client for the Plex Wrapped server API
 
 import type { AdminSettings, UserPassword } from "@/lib/adminStorage";
+import type { AudioSlot } from "@/lib/audio";
 import type {
   AdminConfig,
   ApiUser,
   BuildingResponse,
   CacheStatus,
   LocationsResponse,
+  AudioUploadResponse,
   PublicConfig,
   ReportPeriod,
   ReportResponse,
@@ -121,6 +123,13 @@ export const api = {
       return request<{ version: number }>("/api/admin/app-icon", { method: "POST", form });
     },
     deleteAppIcon: () => request<{ success: boolean }>("/api/admin/app-icon", { method: "DELETE" }),
+    uploadAudio: (slot: AudioSlot, file: File) => {
+      const form = new FormData();
+      form.append("name", file.name);
+      form.append("file", file);
+      return request<AudioUploadResponse>(`/api/admin/audio/${slot}`, { method: "POST", form });
+    },
+    deleteAudio: (slot: AudioSlot) => request<{ settings: AdminSettings }>(`/api/admin/audio/${slot}`, { method: "DELETE" }),
     cacheStatus: () => request<CacheStatus>("/api/admin/cache/status"),
     cacheSync: (full: boolean) => request<CacheStatus>("/api/admin/cache/sync", { method: "POST", body: { full } }),
     cacheClear: (target: "metadata" | "geolocation" | "history") =>

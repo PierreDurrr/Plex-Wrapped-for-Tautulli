@@ -239,6 +239,16 @@ export const getHistoryKey = (h: WatchHistory) => {
   return `fallback:${h.user_id}:${h.started}:${h.date}:${h.rating_key}:${h.stopped}:${h.duration}`;
 };
 
+// Plex image paths for a history row. Rows only carry one image (for an episode: its season's
+// poster), so the others are built from rating keys; Plex serves the item's current image.
+
+/** Portrait poster: the movie's, or for an episode its show's */
+export const posterOf = (h: WatchHistory) =>
+  h.media_type === "episode" && h.grandparent_rating_key ? `/library/metadata/${h.grandparent_rating_key}/thumb` : h.thumb;
+
+/** Landscape image: an episode's own still, or a movie's background art */
+export const bannerOf = (h: WatchHistory) => `/library/metadata/${h.rating_key}/${h.media_type === "episode" ? "thumb" : "art"}`;
+
 /** Total watch time (seconds) for a set of history rows */
 export const totalWatchSeconds = (history: WatchHistory[]) =>
   history.reduce((sum, h) => (isVideoContent(h.media_type) ? sum + getSessionSeconds(h) : sum), 0);
@@ -390,17 +400,56 @@ const emptyStats = (): WrappedStats => ({
   contentDecades: [],
   mostRewatched: null,
   peakConcurrentStreams: null,
+  personality: null,
 });
+
+/** Days since the epoch for a local calendar date */
+export const dayNumber = (p: ZonedParts) => Date.UTC(p.year, p.month, p.day) / 86400000;
+
+/** Most consecutive days in a list of day numbers (duplicates and any order allowed) */
+export const longestStreakOf = (days: number[]) => {
+  const sorted = [...new Set(days)].sort((a, b) => a - b);
+  let current = 1;
+  let longest = sorted.length > 0 ? 1 : 0;
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i] - sorted[i - 1] === 1) {
+      current++;
+      longest = Math.max(longest, current);
+    } else {
+      current = 1;
+    }
+  }
+  return longest;
+};
+
+// A viewer and an episode or movie, for telling rewatches apart
+const viewingKey = (h: WatchHistory) => `${h.user_id}:${h.rating_key}`;
+
+/** The episodes and movies each viewer finished in `history` (see `finishedBefore` below) */
+export const finishedViewingsOf = (history: WatchHistory[]) => {
+  const keys = new Set<string>();
+  for (const h of history) {
+    if (isVideoContent(h.media_type) && h.watched_status >= 1) keys.add(viewingKey(h));
+  }
+  return keys;
+};
+
+// Least rewatching for a comfort watch. Finishing off a viewing that was already past the
+// "watched" mark adds a few minutes of "rewatching" at most, so this keeps such leftovers out.
+const MIN_COMFORT_REWATCH_SECONDS = 3600;
 
 /**
  * `rankByViewers` (the Everyone report): top movies and shows are the ones the most people
  * watched, then the most watch time. Otherwise one viewer rewatching a title over and over
  * outranks titles the whole server watched.
+ *
+ * `finishedBefore` (finishedViewingsOf the history before the period): what each viewer had
+ * already finished, so returning to an old favourite counts towards the comfort watch.
  */
 export const calculateWrappedStats = (
   history: WatchHistory[],
   tz: string,
-  options: { rankByViewers?: boolean } = {}
+  options: { rankByViewers?: boolean; finishedBefore?: Set<string> } = {}
 ): WrappedStats => {
   // Filter to only video content (movies and TV episodes)
   const videoHistory = history.filter((h) => isVideoContent(h.media_type));
@@ -473,7 +522,7 @@ export const calculateWrappedStats = (
   episodes.forEach((e) => {
     const key = e.grandparent_title || e.title;
     if (!showCounts[key]) {
-      showCounts[key] = { count: 0, time: 0, episodes: new Set(), thumb: e.thumb, users: new Set() };
+      showCounts[key] = { count: 0, time: 0, episodes: new Set(), thumb: posterOf(e), users: new Set() };
     }
     showCounts[key].count++;
     showCounts[key].time += getSessionSeconds(e);
@@ -630,41 +679,20 @@ export const calculateWrappedStats = (
   const firstWatchItem = sortedByDate[0];
   const lastWatchItem = sortedByDate[sortedByDate.length - 1];
 
-  const firstWatch = firstWatchItem
-    ? {
-        title: firstWatchItem.full_title || firstWatchItem.title,
-        date: formatLongDate(partsOf(firstWatchItem)),
-      }
-    : null;
-
-  const lastWatch = lastWatchItem
-    ? {
-        title: lastWatchItem.full_title || lastWatchItem.title,
-        date: formatLongDate(partsOf(lastWatchItem)),
-      }
-    : null;
+  const journeyEntry = (h: WatchHistory | undefined) =>
+    h
+      ? {
+          title: h.full_title || h.title,
+          date: formatLongDate(partsOf(h)),
+          year: partsOf(h).year,
+          image: bannerOf(h),
+        }
+      : null;
+  const firstWatch = journeyEntry(firstWatchItem);
+  const lastWatch = journeyEntry(lastWatchItem);
 
   // Longest streak (consecutive calendar days)
-  const watchDays = [
-    ...new Set(
-      videoHistory.map((h) => {
-        const p = partsOf(h);
-        return Date.UTC(p.year, p.month, p.day) / 86400000;
-      })
-    ),
-  ].sort((a, b) => a - b);
-
-  let currentStreak = 1;
-  let longestStreak = watchDays.length > 0 ? 1 : 0;
-
-  for (let i = 1; i < watchDays.length; i++) {
-    if (watchDays[i] - watchDays[i - 1] === 1) {
-      currentStreak++;
-      longestStreak = Math.max(longestStreak, currentStreak);
-    } else {
-      currentStreak = 1;
-    }
-  }
+  const longestStreak = longestStreakOf(videoHistory.map((h) => dayNumber(partsOf(h))));
 
   // Average session length
   const avgSessionLength = videoHistory.length > 0 ? totalWatchTime / videoHistory.length : 0;
@@ -709,32 +737,52 @@ export const calculateWrappedStats = (
     .slice(0, 5)
     .map(([decade, data]) => ({ decade, count: data.count, watchTime: data.time }));
 
-  // Most rewatched: the movie or episode one viewer finished most often. History rows are
-  // ungrouped, so a viewing spread over several sittings only counts once (when finished),
-  // and different viewers each watching a title once is not a rewatch.
-  const playsByViewer = new Map<string, { title: string; finished: number; time: number }>();
-  videoHistory.forEach((h) => {
-    const key = `${h.user_id}:${h.rating_key}`;
-    let entry = playsByViewer.get(key);
-    if (!entry) {
-      entry = { title: h.full_title || h.title, finished: 0, time: 0 };
-      playsByViewer.set(key, entry);
+  // Comfort watch: the show or movie with the most time spent rewatching, i.e. on episodes and
+  // movies the viewer had already finished (before the period, or earlier in it). Counting
+  // time rather than finishes means a show returned to again and again beats a movie seen
+  // twice, and a viewing spread over several sittings isn't mistaken for a rewatch.
+  type Rewatched = { title: string; type: "movie" | "show"; thumb: string; time: number; items: Set<number>; users: Set<number> };
+  const finishedViewings = new Set(options.finishedBefore);
+  const rewatchedTitles = new Map<string, Rewatched>();
+  sortedByDate.forEach((h) => {
+    const key = viewingKey(h);
+    if (finishedViewings.has(key)) {
+      const isShow = h.media_type === "episode";
+      const titleKey = isShow ? `s${h.grandparent_rating_key}` : `m${h.rating_key}`;
+      let entry = rewatchedTitles.get(titleKey);
+      if (!entry) {
+        entry = {
+          title: (isShow ? h.grandparent_title : h.full_title) || h.title,
+          type: isShow ? "show" : "movie",
+          thumb: posterOf(h),
+          time: 0,
+          items: new Set(),
+          users: new Set(),
+        };
+        rewatchedTitles.set(titleKey, entry);
+      }
+      entry.time += getSessionSeconds(h);
+      entry.items.add(h.rating_key);
+      entry.users.add(h.user_id);
     }
-    if (h.watched_status >= 1) entry.finished++;
-    entry.time += getSessionSeconds(h);
+    if (h.watched_status >= 1) finishedViewings.add(key);
   });
-  let mostRewatchedEntry: { title: string; finished: number; time: number } | null = null;
-  for (const entry of playsByViewer.values()) {
-    if (entry.finished < 2) continue;
-    if (
-      !mostRewatchedEntry ||
-      entry.finished > mostRewatchedEntry.finished ||
-      (entry.finished === mostRewatchedEntry.finished && entry.time > mostRewatchedEntry.time)
-    ) {
-      mostRewatchedEntry = entry;
+  let comfortEntry: Rewatched | null = null;
+  for (const entry of rewatchedTitles.values()) {
+    if (entry.time >= MIN_COMFORT_REWATCH_SECONDS && (!comfortEntry || entry.time > comfortEntry.time)) {
+      comfortEntry = entry;
     }
   }
-  const mostRewatched = mostRewatchedEntry ? { title: mostRewatchedEntry.title, rewatchCount: mostRewatchedEntry.finished } : null;
+  const mostRewatched = comfortEntry
+    ? {
+        title: comfortEntry.title,
+        type: comfortEntry.type,
+        rewatchTime: comfortEntry.time,
+        episodeCount: comfortEntry.type === "show" ? comfortEntry.items.size : 0,
+        userCount: comfortEntry.users.size,
+        thumb: comfortEntry.thumb,
+      }
+    : null;
 
   // Peak concurrent streams
   let peakConcurrentStreams: WrappedStats["peakConcurrentStreams"] = null;
@@ -939,6 +987,7 @@ export const aggregateMetadataStats = (
         name,
         count: data.users.size,
         titleCount: data.titles.size,
+        score: data.score,
         watchTime: data.watchTime,
       }));
 

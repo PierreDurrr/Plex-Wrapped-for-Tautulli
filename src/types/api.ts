@@ -1,6 +1,7 @@
 // Types shared between the server API and the web app
 
 import type { AdminSettings, EmailSettings, UserPassword } from "@/lib/adminStorage";
+import type { AudioSlot } from "@/lib/audio";
 import type { StreamingLocation, TautulliUser, WrappedStats } from "./tautulli";
 
 export type PublicSettings = Omit<AdminSettings, "nightlySyncTime">;
@@ -10,6 +11,8 @@ export interface PublicConfig {
   adminPasswordSet: boolean;
   settings: PublicSettings;
   plexServerName: string | null;
+  /** Per sound: the version of the uploaded file when it is selected, or null for the default */
+  customAudioVersions: Record<AudioSlot, number | null>;
 }
 
 export interface ViewerInfo {
@@ -72,7 +75,6 @@ export interface ReportHistory {
   /** Hours and viewers per year over the whole history (years without any as 0) */
   yearly: { year: number; hours: number; viewers: number }[];
   previous: PreviousPeriod | null;
-  firstSession: { title: string; date: string; year: number } | null;
 }
 
 export interface ReportResponse {
@@ -123,6 +125,19 @@ export interface AdminConfig {
   plexServer: { machineId: string; name: string } | null;
   /** Version of the uploaded app icon, or null when the default icon is used */
   appIconVersion: number | null;
+  /** Per sound: the uploaded file (kept while the default is selected), or null */
+  customAudio: Record<AudioSlot, CustomAudioInfo | null>;
+}
+
+export interface CustomAudioInfo {
+  fileName: string;
+  version: number;
+}
+
+/** An upload also selects the new file, so the updated settings come back too */
+export interface AudioUploadResponse {
+  customAudio: CustomAudioInfo;
+  settings: AdminSettings;
 }
 
 export type VersionStatus = "update-available" | "up-to-date" | "develop" | "unknown";

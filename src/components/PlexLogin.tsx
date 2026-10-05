@@ -3,6 +3,10 @@ import { motion } from "framer-motion";
 import { Loader2, LogIn, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CustomLogo } from "./CustomLogo";
+import { AmbientBackground } from "./motion/AmbientBackground";
+import { KineticText } from "./motion/KineticText";
+import { Motes } from "./motion/Motes";
+import { HeroBackdrop, HeroScreen } from "./motion/HeroDecor";
 import { api } from "@/lib/api";
 import { plexLoginErrorMessage, waitForPlexPin } from "@/lib/plexAuth";
 import { getServerAdminSettings } from "@/lib/serverConfig";
@@ -77,7 +81,9 @@ export const PlexLogin = ({ serverName, initialError, pending = false, onSignedI
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative">
-      <div className="fixed inset-0 bg-noise pointer-events-none" />
+      <AmbientBackground />
+      <HeroBackdrop />
+      <Motes />
 
       <Button
         variant="outline"
@@ -91,9 +97,14 @@ export const PlexLogin = ({ serverName, initialError, pending = false, onSignedI
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center max-w-md relative z-10">
         <CustomLogo className="mx-auto mb-6" />
-        <h1 className="text-5xl md:text-7xl font-extrabold mb-4">
-          <span className="gradient-text glow-text">{title}</span>
-        </h1>
+        <KineticText
+          as="h1"
+          text={title}
+          gradient
+          trigger="mount"
+          delay={0.15}
+          className="font-display text-5xl md:text-7xl font-extrabold tracking-tighter leading-[0.95] mb-5 glow-text"
+        />
         <p className="text-xl text-muted-foreground mb-8">
           Sign in with Plex to see your stats{serverName ? ` on ${serverName}` : ""}
         </p>
@@ -114,6 +125,8 @@ export const PlexLogin = ({ serverName, initialError, pending = false, onSignedI
           Only accounts with access to this Plex server can sign in.
         </p>
       </motion.div>
+
+      <HeroScreen />
     </div>
   );
 };

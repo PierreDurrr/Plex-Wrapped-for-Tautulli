@@ -1,8 +1,12 @@
 import { motion } from "framer-motion";
-import { History, ArrowUp, ArrowDown, Flag } from "lucide-react";
+import { History, ArrowUp, ArrowDown } from "lucide-react";
 import { StatCard } from "./StatCard";
+import { EASE_OUT_EXPO, VIEWPORT } from "@/lib/motion";
+import { SectionHeader } from "./SectionHeader";
 import { YearlyTrends } from "./YearlyTrends";
+import { PeakConcurrent } from "./PeakConcurrent";
 import type { PeriodSummary, PreviousPeriod, ReportHistory } from "@/types/api";
+import type { WrappedStats } from "@/types/tautulli";
 
 interface ThroughTheYearsProps {
   history: ReportHistory;
@@ -11,6 +15,8 @@ interface ThroughTheYearsProps {
   /** The report's year, highlighted in the yearly chart */
   highlightYear?: number;
   isGroup: boolean;
+  /** Everyone's report: shown after the viewer charts */
+  peakConcurrentStreams?: WrappedStats["peakConcurrentStreams"];
 }
 
 // Hidden when there is nothing to compare: no previous period and only one year of history
@@ -41,8 +47,8 @@ const ChangeBadge = ({ change }: { change: number | null }) => {
   );
 };
 
-export const ThroughTheYears = ({ history, current, highlightYear, isGroup }: ThroughTheYearsProps) => {
-  const { previous, yearly, firstSession } = history;
+export const ThroughTheYears = ({ history, current, highlightYear, isGroup, peakConcurrentStreams = null }: ThroughTheYearsProps) => {
+  const { previous, yearly } = history;
   const showYearly = yearly.filter((y) => y.hours > 0).length >= 2;
   const watchChange = previous ? percentChange(current.watchTime, previous.watchTime) : null;
 
@@ -55,23 +61,9 @@ export const ThroughTheYears = ({ history, current, highlightYear, isGroup }: Th
       ]
     : [];
 
-  const yearsAgo = firstSession ? new Date().getFullYear() - firstSession.year : 0;
-  const yearsAgoText = yearsAgo <= 0 ? "this year" : yearsAgo === 1 ? "1 year ago" : `${yearsAgo} years ago`;
-
   return (
     <div className="space-y-6">
-      <div className="text-center mb-8">
-        <motion.div
-          initial={{ rotate: -10, scale: 0 }}
-          whileInView={{ rotate: 0, scale: 1 }}
-          viewport={{ once: true }}
-          transition={{ type: "spring", stiffness: 200 }}
-          className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-purple/30 to-pink/30 mb-4"
-        >
-          <History className="w-7 h-7 text-purple" />
-        </motion.div>
-        <h2 className="text-3xl font-bold gradient-text">Through the Years</h2>
-      </div>
+      <SectionHeader icon={History} title="Through the Years" badgeClassName="bg-gradient-to-br from-purple/30 to-pink/30" iconClassName="text-purple" />
 
       {previous && watchChange !== null && (
         <StatCard className="text-center">
@@ -81,7 +73,7 @@ export const ThroughTheYears = ({ history, current, highlightYear, isGroup }: Th
               <>about as much as {comparedWith(previous)}</>
             ) : (
               <>
-                <span className="gradient-text">
+                <span className="gradient-value">
                   {Math.abs(watchChange).toLocaleString()}% {watchChange > 0 ? "more" : "less"}
                 </span>{" "}
                 than {comparedWith(previous)}
@@ -98,8 +90,8 @@ export const ThroughTheYears = ({ history, current, highlightYear, isGroup }: Th
                 key={tile.label}
                 initial={{ opacity: 0, y: 10 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.1 + index * 0.1 }}
+                viewport={VIEWPORT}
+                transition={{ delay: 0.1 + index * 0.1, duration: 0.7, ease: EASE_OUT_EXPO }}
                 className="rounded-xl bg-muted/40 p-3"
               >
                 <p className="text-xs text-muted-foreground mb-1">{tile.label}</p>
@@ -118,24 +110,7 @@ export const ThroughTheYears = ({ history, current, highlightYear, isGroup }: Th
 
       {isGroup && showYearly && <YearlyTrends watchByYear={yearly} metric="viewers" highlightYear={highlightYear} />}
 
-      {firstSession && (
-        <StatCard delay={0.2}>
-          <div className="flex items-start gap-4">
-            <div className="p-3 rounded-xl bg-green/20">
-              <Flag className="w-6 h-6 text-green" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-muted-foreground text-sm mb-1">
-                {isGroup ? "The server's first recorded session" : "Where it all began"}
-              </p>
-              <p className="text-xl font-bold text-foreground">{firstSession.title}</p>
-              <p className="text-sm text-muted-foreground">
-                {firstSession.date} · {yearsAgoText}
-              </p>
-            </div>
-          </div>
-        </StatCard>
-      )}
+      {peakConcurrentStreams && <PeakConcurrent peakConcurrentStreams={peakConcurrentStreams} />}
     </div>
   );
 };

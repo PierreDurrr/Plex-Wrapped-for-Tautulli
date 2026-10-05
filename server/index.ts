@@ -6,7 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { APP_VERSION } from "@/version";
 import { isValidPeriod } from "@/lib/stats";
-import type { AdminConfig, ApiUser } from "@/types/api";
+import type { AdminConfig, ApiUser, AudioUploadResponse } from "@/types/api";
 import type { UserPassword } from "@/lib/adminStorage";
 import { dataPath, ensureDataDir } from "./storage";
 import { getConfig, getPublicConfig, getSettings, isTautulliConfigured, loadConfig, normalizeSettings, updateConfig } from "./config";
@@ -36,9 +36,11 @@ import { clearGeoCache, loadGeoCache } from "./geo";
 import { buildReport, buildReportLocations, clearReportMemo, resolveTimeZone } from "./report";
 import { getCacheStatus, maybeRefresh, runPipeline, scheduleNightly, startScheduler } from "./scheduler";
 import { buildAuthUrl, checkPin, createPin, getAccount, getServerAccess, PlexError } from "./plex";
-import { getVersionInfo } from "./version";
+import { getVersionInfo, startVersionChecks } from "./version";
 import { buildManifest, deleteAppIcons, getAppIconVersion, isAppIconName, loadAppIcons, readAppIcon, renderIndexHtml, saveAppIcons } from "./pwa";
 import { APP_ICON_VARIANTS } from "@/lib/appIcons";
+import { AUDIO_SLOT_NAMES, isAudioSlot, MAX_AUDIO_SIZE, type AudioSlot } from "@/lib/audio";
+import { customAudioFile, deleteCustomAudio, loadCustomAudio, saveCustomAudio } from "./audio";
 
 const LOGO_FILE = dataPath("custom-logo.png");
 const STATIC_DIR = path.resolve(process.env.STATIC_DIR || "dist");
@@ -125,6 +127,20 @@ api.get("/pwa/icon/:file", async (req, res) => {
   } catch {
     fail(res, 404, "No custom app icon");
   }
+});
+
+// Uploaded sounds; the defaults are static files in /audio.
+// sendFile handles Range requests, which Safari needs to play audio.
+api.get("/audio/:slot", (req, res) => {
+  const slot = req.params.slot;
+  const upload = isAudioSlot(slot) ? getConfig().customAudio[slot] : undefined;
+  if (!upload) return fail(res, 404, "No custom sound");
+  res.set("Content-Type", upload.contentType);
+  res.set("Cache-Control", "public, max-age=86400");
+  res.set("Content-Security-Policy", "default-src 'none'");
+  res.sendFile(customAudioFile(slot as AudioSlot), (error) => {
+    if (error && !res.headersSent) fail(res, 404, "No custom sound");
+  });
 });
 
 // ============ Plex login ============
@@ -311,7 +327,9 @@ api.get("/image", async (req, res) => {
   const thumb = String(req.query.thumb || "");
   if (!thumb.startsWith("/library/") || thumb.includes("..") || thumb.length > 300) return fail(res, 400, "Invalid image");
   try {
-    const image = await tautulliImage(thumb, 300, 450);
+    // Posters are portrait; episode stills and background art are landscape
+    const [width, height] = req.query.shape === "landscape" ? [480, 270] : [300, 450];
+    const image = await tautulliImage(thumb, width, height);
     res.set("Content-Type", image.contentType);
     res.set("Cache-Control", "private, max-age=86400");
     res.send(image.buffer);
@@ -370,6 +388,12 @@ admin.get("/config", (_req, res) => {
     userPasswords: c.userPasswords,
     plexServer: c.plexServer ?? null,
     appIconVersion: getAppIconVersion(),
+    customAudio: Object.fromEntries(
+      AUDIO_SLOT_NAMES.map((slot) => {
+        const upload = c.customAudio[slot];
+        return [slot, upload ? { fileName: upload.fileName, version: upload.version } : null];
+      })
+    ) as AdminConfig["customAudio"],
   };
   res.json(body);
 });
@@ -488,6 +512,33 @@ admin.delete("/app-icon", async (_req, res) => {
   res.json({ success: true });
 });
 
+const requireAudioSlot = (req: Request, res: Response, next: NextFunction) => {
+  if (isAudioSlot(String(req.params.slot))) next();
+  else fail(res, 404, "Unknown sound");
+};
+
+// Checked by content instead of MIME type, which browsers report inconsistently for audio
+const audioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_AUDIO_SIZE, files: 1 },
+});
+
+admin.post("/audio/:slot", requireAudioSlot, audioUpload.single("file"), async (req, res) => {
+  const slot = req.params.slot as AudioSlot;
+  if (!req.file) return fail(res, 400, "No file uploaded");
+  // The name is sent as its own field, since multer decodes file names as latin1
+  const error = await saveCustomAudio(slot, req.file.buffer, String(req.body?.name || req.file.originalname));
+  if (error) return fail(res, 400, error);
+  const { fileName, version } = getConfig().customAudio[slot]!;
+  const body: AudioUploadResponse = { customAudio: { fileName, version }, settings: getSettings() };
+  res.json(body);
+});
+
+admin.delete("/audio/:slot", requireAudioSlot, async (req, res) => {
+  await deleteCustomAudio(req.params.slot as AudioSlot);
+  res.json({ settings: getSettings() });
+});
+
 admin.get("/cache/status", (_req, res) => {
   res.json(getCacheStatus());
 });
@@ -560,11 +611,12 @@ const start = async () => {
   await ensureDataDir();
   await loadConfig();
   await loadSessionSecret();
-  await Promise.all([loadHistory(), loadMetadataCache(), loadGeoCache(), loadAppIcons()]);
+  await Promise.all([loadHistory(), loadMetadataCache(), loadGeoCache(), loadAppIcons(), loadCustomAudio()]);
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Plex Wrapped ${APP_VERSION} running on port ${PORT} (data: ${dataPath("")})`);
   });
   startScheduler();
+  startVersionChecks();
 };
 
 start().catch((error) => {

@@ -1,5 +1,7 @@
+import { motion } from "framer-motion";
 import { StatCard } from "./StatCard";
 import { getRelatableFacts } from "@/lib/relatable";
+import { SPRING_POP, VIEWPORT } from "@/lib/motion";
 import type { YearSelection } from "@/components/YearSelector";
 import type { WrappedStats } from "@/types/tautulli";
 
@@ -15,16 +17,27 @@ export const RelatableNumbers = ({ stats, selection, isGroup }: RelatableNumbers
 
   return (
     <div className="space-y-4">
-      <p className="text-center text-sm font-medium text-primary tracking-wider uppercase">Picture this</p>
+      <div className="flex items-center justify-center gap-3">
+        <span className="h-px w-10 bg-gradient-to-r from-transparent to-primary/60" />
+        <p className="text-sm font-semibold text-primary tracking-[0.25em] uppercase">Picture this</p>
+        <span className="h-px w-10 bg-gradient-to-l from-transparent to-primary/60" />
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {facts.map((fact, index) => (
           <StatCard key={fact.label} delay={0.1 + index * 0.1}>
             <div className="flex items-center gap-4">
-              <div className="text-4xl shrink-0" aria-hidden>
+              <motion.div
+                className="text-4xl shrink-0"
+                aria-hidden
+                initial={{ scale: 0, rotate: -25 }}
+                whileInView={{ scale: 1, rotate: 0 }}
+                viewport={VIEWPORT}
+                transition={{ ...SPRING_POP, delay: 0.3 + index * 0.1 }}
+              >
                 {fact.emoji}
-              </div>
+              </motion.div>
               <div className="min-w-0">
-                <p className="text-2xl md:text-3xl font-extrabold gradient-text break-words">{fact.value}</p>
+                <p className="font-display text-3xl md:text-4xl font-extrabold tracking-tight gradient-value break-words">{fact.value}</p>
                 <p className="text-sm text-muted-foreground">{fact.label}</p>
               </div>
             </div>

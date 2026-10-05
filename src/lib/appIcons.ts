@@ -18,7 +18,7 @@ export const APP_ICON_VARIANTS: AppIconVariant[] = [
   { name: "apple-touch-icon", size: 180, opaque: true },
 ];
 
-/** App background (--background), used for the manifest and icon backgrounds */
+/** The default theme's page background, behind uploaded icons that have no background of their own */
 export const APP_BACKGROUND = "#09090b";
 
 /** The bundled default icons (public/icons) */

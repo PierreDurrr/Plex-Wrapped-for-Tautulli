@@ -3,6 +3,7 @@
 import {
   aggregateMetadataStats,
   calculateWrappedStats,
+  finishedViewingsOf,
   formatLongDate,
   getEventSeconds,
   getPeriodRange,
@@ -17,6 +18,7 @@ import {
   watchByYearOf,
   zonedParts,
 } from "@/lib/stats";
+import { calculatePersonality } from "@/lib/personality";
 import type {
   LeaderboardEntry,
   LocationsResponse,
@@ -79,22 +81,21 @@ export const clearReportMemo = () => {
 
 /**
  * Drops the cached reports that the given history rows (new, edited or deleted) affect:
- * the rows' years, the past 12 months and all time, for those users and for everyone.
+ * the rows' years and later ones (comfort watches look back at what was finished before),
+ * the past 12 months and all time, for those users and for everyone.
  */
 export const invalidateReportsFor = (changedRows: WatchHistory[]) => {
   if (changedRows.length === 0) return;
   const users = new Set<number>();
-  const years = new Set<string>();
+  let firstYear = Infinity;
   for (const row of changedRows) {
     users.add(row.user_id);
-    const t = getEventSeconds(row);
-    // Cover every timezone: the row can fall in a neighbouring year somewhere in the world
-    years.add(String(new Date((t - 14 * 3600) * 1000).getUTCFullYear()));
-    years.add(String(new Date((t + 14 * 3600) * 1000).getUTCFullYear()));
+    // Cover every timezone: the row can fall in the previous year somewhere in the world
+    firstYear = Math.min(firstYear, new Date((getEventSeconds(row) - 14 * 3600) * 1000).getUTCFullYear());
   }
   let dropped = 0;
   for (const [key, entry] of memo) {
-    const periodAffected = entry.period === "rolling" || entry.period === "alltime" || years.has(entry.period);
+    const periodAffected = entry.period === "rolling" || entry.period === "alltime" || Number(entry.period) >= firstYear;
     if (periodAffected && (entry.userId === null || users.has(entry.userId))) {
       memo.delete(key);
       dropped++;
@@ -167,12 +168,15 @@ const compute = async (userId: number | null, period: string, tz: string): Promi
   const rows = loaded.rows;
   let partial = loaded.partial;
 
-  const stats = calculateWrappedStats(rows, tz, { rankByViewers: userId === null });
+  // What each viewer had already finished, so returning to an old favourite counts as rewatching
+  const finishedBefore = finishedViewingsOf(rowsInRange(userId, 0, start - 1));
+  const stats = calculateWrappedStats(rows, tz, { rankByViewers: userId === null, finishedBefore });
   const { movieEntries, showEntries } = selectMetadataTargets(rows);
   const creditKeys = [...movieEntries, ...showEntries].map(([key]) => key);
   await ensureWithLimit(creditKeys);
   partial = partial || hasUnresolvedMetadata(creditKeys);
   Object.assign(stats, aggregateMetadataStats(rows, getCredits));
+  stats.personality = calculatePersonality(rows, tz, userId === null);
 
   const oldest = getOldestEvent();
   // Ranking and history are added by buildReport (see buildExtras)
@@ -236,7 +240,7 @@ const buildPeriodReport = async (userId: number | null, period: string, tz: stri
 
 const extrasMemo = new Map<string, string>();
 const watchTimeTables = new Map<string, Map<number, number>>();
-const timelines = new Map<string, Pick<ReportHistory, "yearly" | "firstSession">>();
+const timelines = new Map<string, Pick<ReportHistory, "yearly">>();
 let extrasStamp = "";
 
 const refreshExtrasCaches = () => {
@@ -275,25 +279,14 @@ const buildRank = async (userId: number, period: string, tz: string): Promise<Vi
   return { percentile, position: 1 + times.filter((t) => t > own).length, viewers: times.length };
 };
 
-// Hours per year and the first recorded session, over the whole history
+// Hours and viewers per year, over the whole history
 const buildTimeline = async (userId: number | null, tz: string) => {
   const key = `${userId ?? "all"}|${tz}`;
   let timeline = timelines.get(key);
   if (!timeline) {
     const { start, end } = getPeriodRange("alltime", tz);
     const { rows } = await loadRows(userId, start, end);
-    let first: WatchHistory | null = null;
-    for (const h of rows) {
-      if (isVideoContent(h.media_type) && (!first || getEventSeconds(h) < getEventSeconds(first))) first = h;
-    }
-    const firstParts = first ? zonedParts(getEventSeconds(first), tz) : null;
-    timeline = {
-      yearly: watchByYearOf(rows, tz),
-      firstSession:
-        first && firstParts
-          ? { title: first.full_title || first.title, date: formatLongDate(firstParts), year: firstParts.year }
-          : null,
-    };
+    timeline = { yearly: watchByYearOf(rows, tz) };
     timelines.set(key, timeline);
   }
   return timeline;

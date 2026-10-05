@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { TrendingUp, Users } from "lucide-react";
 import { StatCard } from "./StatCard";
+import { EASE_OUT_EXPO, VIEWPORT } from "@/lib/motion";
 
 type YearlyMetric = "hours" | "viewers";
 
@@ -52,7 +53,7 @@ export const YearlyTrends = ({ watchByYear, metric = "hours", highlightYear }: Y
           <Icon className="w-5 h-5" />
         </div>
         <div>
-          <h3 className="text-xl font-bold text-foreground">{config.title}</h3>
+          <h3 className="font-display text-2xl font-bold tracking-tight text-foreground">{config.title}</h3>
           {peakYear && valueOf(peakYear) > 0 && (
             <p className="text-sm text-muted-foreground">
               Peak: <span className="text-primary font-semibold">{peakYear.year}</span> with {config.peak(valueOf(peakYear))}
@@ -84,8 +85,8 @@ export const YearlyTrends = ({ watchByYear, metric = "hours", highlightYear }: Y
                   <motion.div
                     initial={{ scaleY: 0 }}
                     whileInView={{ scaleY: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: index * 0.05, duration: 0.5 }}
+                    viewport={VIEWPORT}
+                    transition={{ delay: index * 0.05, duration: 1, ease: EASE_OUT_EXPO }}
                     style={{ height: `${height}%` }}
                     className={`w-full origin-bottom rounded-t-md transition-colors ${
                       isHighlighted ? "bg-gradient-to-t from-pink to-orange" : config.bar

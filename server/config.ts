@@ -3,6 +3,8 @@
 import crypto from "node:crypto";
 import { dataPath, readJson, writeJsonAtomic } from "./storage";
 import { DEFAULT_ADMIN_SETTINGS, parseMonthDay, type AccessMode, type AdminSettings, type EmailSettings, type UserPassword } from "@/lib/adminStorage";
+import { AUDIO_SLOT_NAMES, AUDIO_SLOTS, type AudioSlot } from "@/lib/audio";
+import { isThemeId } from "@/lib/themes";
 import type { PublicConfig } from "@/types/api";
 
 const CONFIG_FILE = dataPath("config.json");
@@ -31,6 +33,14 @@ export interface StoredConfig {
   userPasswords: UserPassword[];
   plexClientId: string;
   plexServer?: { machineId: string; name: string };
+  /** Uploaded sounds (stored as /data/custom-<slot>); version = upload time */
+  customAudio: Partial<Record<AudioSlot, CustomAudioFile>>;
+}
+
+export interface CustomAudioFile {
+  fileName: string;
+  contentType: string;
+  version: number;
 }
 
 let config: StoredConfig | null = null;
@@ -59,6 +69,13 @@ export const normalizeSettings = (raw: any): AdminSettings => {
     // Not trimmed here: the admin panel saves while typing, trailing spaces included
     appName: typeof s.appName === "string" ? s.appName.slice(0, 60) : DEFAULT_ADMIN_SETTINGS.appName,
     currentYearFrom: parseMonthDay(s.currentYearFrom) ? s.currentYearFrom : DEFAULT_ADMIN_SETTINGS.currentYearFrom,
+    musicEnabled: s.musicEnabled !== false,
+    musicSource: s.musicSource === "custom" ? "custom" : "default",
+    musicStartUnmuted: Boolean(s.musicStartUnmuted),
+    unwrapSoundEnabled: s.unwrapSoundEnabled !== false,
+    unwrapSoundSource: s.unwrapSoundSource === "custom" ? "custom" : "default",
+    // Unknown ids fall back to the default, which also covers "classic" (the default theme's old id)
+    theme: isThemeId(s.theme) ? s.theme : DEFAULT_ADMIN_SETTINGS.theme,
   };
 };
 
@@ -78,6 +95,13 @@ export const loadConfig = async (): Promise<StoredConfig> => {
     userPasswords: Array.isArray(raw.userPasswords) ? raw.userPasswords : [],
     plexClientId: typeof raw.plexClientId === "string" && raw.plexClientId ? raw.plexClientId : crypto.randomUUID(),
     plexServer: raw.plexServer?.machineId ? raw.plexServer : undefined,
+    customAudio: Object.fromEntries(
+      AUDIO_SLOT_NAMES.flatMap((slot) => {
+        const file = raw.customAudio?.[slot];
+        if (!Number.isFinite(file?.version) || typeof file?.contentType !== "string") return [];
+        return [[slot, { fileName: String(file.fileName || `Custom ${AUDIO_SLOTS[slot].noun}`), contentType: file.contentType, version: file.version }]];
+      })
+    ),
   };
   config = loaded;
 
@@ -108,6 +132,10 @@ export const getSettings = () => getConfig().adminSettings;
 
 export const isTautulliConfigured = () => Boolean(getConfig().tautulli);
 
+/** The uploaded file for a slot while it is selected (a missing upload falls back to the default) */
+export const selectedCustomAudio = (c: StoredConfig, slot: AudioSlot) =>
+  c.adminSettings[AUDIO_SLOTS[slot].sourceSetting] === "custom" ? c.customAudio[slot] : undefined;
+
 export const getPublicConfig = (): PublicConfig => {
   const c = getConfig();
   const { nightlySyncTime, ...settings } = c.adminSettings;
@@ -116,5 +144,6 @@ export const getPublicConfig = (): PublicConfig => {
     adminPasswordSet: Boolean(c.adminPassword || c.adminPasswordHash),
     settings,
     plexServerName: c.plexServer?.name ?? null,
+    customAudioVersions: Object.fromEntries(AUDIO_SLOT_NAMES.map((slot) => [slot, selectedCustomAudio(c, slot)?.version ?? null])) as Record<AudioSlot, number | null>,
   };
 };
