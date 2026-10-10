@@ -3,7 +3,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getAppName, type AdminSettings } from "@/lib/adminStorage";
-import { APP_BACKGROUND, APP_ICON_VARIANTS, customAppIconUrl, defaultAppIconUrl, type AppIconName } from "@/lib/appIcons";
+import { APP_ICON_VARIANTS, customAppIconUrl, defaultAppIconUrl, type AppIconName } from "@/lib/appIcons";
+import { DEFAULT_THEME, getTheme, isThemeId } from "@/lib/themes";
 import { dataPath } from "./storage";
 
 const ICON_DIR = dataPath("app-icons");
@@ -62,6 +63,7 @@ export const appIconUrl = (name: AppIconName) =>
 
 export const buildManifest = (settings: AdminSettings) => {
   const name = getAppName(settings);
+  const { background } = getTheme(settings.theme);
   return {
     id: "/",
     name,
@@ -70,8 +72,8 @@ export const buildManifest = (settings: AdminSettings) => {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: APP_BACKGROUND,
-    theme_color: APP_BACKGROUND,
+    background_color: background,
+    theme_color: background,
     icons: [
       { src: appIconUrl("icon-192"), sizes: "192x192", type: "image/png", purpose: "any" },
       { src: appIconUrl("icon-512"), sizes: "512x512", type: "image/png", purpose: "any" },
@@ -83,14 +85,18 @@ export const buildManifest = (settings: AdminSettings) => {
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/** Puts the app name and icons into index.html (the built file keeps the defaults for `npm run dev`) */
+/** Puts the app name, icons and theme into index.html (the built file keeps the defaults for `npm run dev`) */
 export const renderIndexHtml = (template: string, settings: AdminSettings) => {
   const name = escapeHtml(getAppName(settings));
   // Replacer functions, so a "$" in the name is never read as a substitution pattern
   const setAttr = (html: string, prefix: string, value: string) =>
     html.replace(new RegExp(`(${prefix})[^"]*"`), (_m, start: string) => `${start}${value}"`);
+  // Set before the page loads, so it never shows the default theme first
+  const theme = isThemeId(settings.theme) ? settings.theme : DEFAULT_THEME;
 
-  let html = template.replace(/<title>[^<]*<\/title>/, () => `<title>${name}</title>`);
+  let html = template.replace(/<html([^>]*)>/, (_m, attrs: string) => `<html${attrs} data-theme="${theme}">`);
+  html = setAttr(html, '<meta name="theme-color" content="', getTheme(theme).background);
+  html = html.replace(/<title>[^<]*<\/title>/, () => `<title>${name}</title>`);
   html = setAttr(html, '<meta name="application-name" content="', name);
   html = setAttr(html, '<meta name="apple-mobile-web-app-title" content="', name);
   html = setAttr(html, '<meta property="og:title" content="', name);

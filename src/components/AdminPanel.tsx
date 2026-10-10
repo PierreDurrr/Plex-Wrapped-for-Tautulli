@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Shield, Eye, EyeOff, Lock, RefreshCw, Copy, Check, X, Users, Settings2, AlertCircle, Server, Key, Loader2, Image, Upload, Trash2, Trophy, Globe, Database, LogOut, ExternalLink, MonitorSmartphone, CalendarDays } from "lucide-react";
+import { Shield, Eye, EyeOff, Lock, RefreshCw, Copy, Check, X, Users, Settings2, AlertCircle, Server, Key, Loader2, Image, Upload, Trash2, Trophy, Medal, Globe, Database, LogOut, ExternalLink, MonitorSmartphone, CalendarDays, Music, Gift, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -15,10 +15,15 @@ import { AccessMode, AdminSettings, DAYS_IN_MONTH, DEFAULT_ADMIN_SETTINGS, UserP
 import { getDefaultYear } from "./YearSelector";
 import { customAppIconUrl, defaultAppIconUrl } from "@/lib/appIcons";
 import { renderAppIcons } from "@/lib/pwa";
+import { AUDIO_SLOTS, type AudioSlot } from "@/lib/audio";
+import { AudioSetting } from "./AudioSetting";
+import { pauseBackgroundMusic } from "@/lib/sounds";
 import { ImageExportDialog } from "./ImageExportDialog";
 import { checkLogoExists, getLogoUrl, setCachedSettings } from "@/lib/serverConfig";
+import { THEMES, THEME_IDS, type ThemeId } from "@/lib/themes";
+import { applyTheme } from "@/lib/applyTheme";
 import { api, ApiError } from "@/lib/api";
-import type { AdminConfig, ApiUser, CacheStatus, VersionInfo } from "@/types/api";
+import type { AdminConfig, ApiUser, CacheStatus, CustomAudioInfo, VersionInfo } from "@/types/api";
 import { APP_VERSION } from "@/version";
 import { toast } from "sonner";
 
@@ -56,7 +61,7 @@ const VersionBadge = ({ version }: { version: VersionInfo | null }) => {
         </a>
       );
     case "up-to-date":
-      return <span className={`${base} bg-green-500/20 text-green-500`}>{version.current} · Up to date</span>;
+      return <span className={`${base} bg-green/20 text-green`}>{version.current} · Up to date</span>;
     case "develop":
       return <span className={`${base} bg-purple/20 text-purple`}>{version.current} · Develop Build</span>;
     default:
@@ -100,6 +105,9 @@ export const AdminPanel = ({ isOpen, onClose }: AdminPanelProps) => {
   const [appIconVersion, setAppIconVersion] = useState<number | null>(null);
   const [isUploadingIcon, setIsUploadingIcon] = useState(false);
   const iconInputRef = useRef<HTMLInputElement>(null);
+
+  // Uploaded sounds (background music, unwrap sound)
+  const [customAudio, setCustomAudio] = useState<AdminConfig["customAudio"]>({ music: null, unwrap: null });
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingPatch = useRef<Partial<AdminSettings>>({});
 
@@ -118,6 +126,7 @@ export const AdminPanel = ({ isOpen, onClose }: AdminPanelProps) => {
     setTautulliUrl(config.tautulli?.url ?? "");
     setTautulliApiKey(config.tautulli?.apiKey ?? "");
     setAppIconVersion(config.appIconVersion);
+    setCustomAudio(config.customAudio);
     setView("panel");
     checkLogoStatus();
     api.admin.cacheStatus().then(setCacheStatus).catch(() => {});
@@ -154,6 +163,15 @@ export const AdminPanel = ({ isOpen, onClose }: AdminPanelProps) => {
     }, cacheRunning ? 2000 : 10000);
     return () => clearInterval(interval);
   }, [isOpen, view, cacheRunning]);
+
+  // Check for updates again now and then while the panel stays open
+  useEffect(() => {
+    if (!isOpen || view !== "panel") return;
+    const interval = setInterval(() => {
+      api.admin.version().then(setVersion).catch(() => {});
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [isOpen, view]);
 
   const handleSetPassword = async () => {
     if (password.length < 4) {
@@ -205,12 +223,20 @@ export const AdminPanel = ({ isOpen, onClose }: AdminPanelProps) => {
     } catch (error) {
       toast.error((error as Error).message);
       // Re-sync with what the server has
-      api.admin.config().then((c) => setSettings(c.settings)).catch(() => {});
+      api.admin
+        .config()
+        .then((c) => {
+          setSettings(c.settings);
+          applyTheme(c.settings.theme);
+        })
+        .catch(() => {});
     }
   };
 
   const handleSettingChange = <K extends keyof AdminSettings>(key: K, value: AdminSettings[K], debounce = false) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
+    // Show a new theme right away, without waiting for the save
+    if (key === "theme") applyTheme(value);
     pendingPatch.current = { ...pendingPatch.current, [key]: value };
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (debounce) saveTimer.current = setTimeout(flushSettings, 500);
@@ -315,6 +341,14 @@ export const AdminPanel = ({ isOpen, onClose }: AdminPanelProps) => {
     } catch (error) {
       toast.error((error as Error).message || "Failed to restore the default icon");
     }
+  };
+
+  // Uploading or deleting a sound also switches it on the server; only that setting is taken over, so unsaved edits stay
+  const handleCustomAudioChange = (slot: AudioSlot, custom: CustomAudioInfo | null, saved: AdminSettings) => {
+    const key = AUDIO_SLOTS[slot].sourceSetting;
+    setCustomAudio((prev) => ({ ...prev, [slot]: custom }));
+    setSettings((prev) => ({ ...prev, [key]: saved[key] }));
+    setCachedSettings(saved);
   };
 
   // Keeps the day valid when switching to a shorter month
@@ -518,12 +552,12 @@ export const AdminPanel = ({ isOpen, onClose }: AdminPanelProps) => {
                         <div className="flex items-center gap-2 mb-2">
                           <Server className="w-5 h-5 text-primary" />
                           <h3 className="font-semibold">Tautulli Connection</h3>
-                          {connected && <span className="text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">
+                          {connected && <span className="text-xs bg-green/20 text-green px-2 py-0.5 rounded-full">
                               Connected{plexServer ? ` · ${plexServer.name}` : ""}
                             </span>}
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          Configure your Tautulli connection here. This will be used for all users accessing the app.
+                          Configure your Tautulli connection here.
                         </p>
 
                         <div className="space-y-2">
@@ -640,6 +674,49 @@ export const AdminPanel = ({ isOpen, onClose }: AdminPanelProps) => {
                           <Switch id="password-protect" checked={settings.passwordProtectUsers} onCheckedChange={checked => handleSettingChange('passwordProtectUsers', checked)} />
                         </div>
                       )}
+                    </div>
+
+                    {/* Theme: each option is drawn in its own theme (data-theme) */}
+                    <div className="p-4 rounded-lg bg-muted/50 space-y-3">
+                      <div className="space-y-0.5">
+                        <Label className="text-base flex items-center gap-2">
+                          <Palette className="w-4 h-4" />
+                          Theme
+                        </Label>
+                        <p className="text-sm text-muted-foreground">Colours of the report and the exported images</p>
+                      </div>
+                      <RadioGroup
+                        value={settings.theme}
+                        onValueChange={value => handleSettingChange('theme', value as ThemeId)}
+                        className="grid gap-2 sm:grid-cols-3"
+                      >
+                        {THEME_IDS.map(id => (
+                          <label
+                            key={id}
+                            htmlFor={`theme-${id}`}
+                            data-theme={id}
+                            className={`flex flex-col gap-3 p-3 rounded-md border bg-background text-foreground cursor-pointer transition-colors ${
+                              settings.theme === id ? "border-primary" : "border-border hover:border-muted-foreground/50"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="font-display text-3xl font-extrabold tracking-tighter leading-none gradient-text">
+                                {getDefaultYear(settings.currentYearFrom)}
+                              </span>
+                              <RadioGroupItem id={`theme-${id}`} value={id} />
+                            </div>
+                            <div aria-hidden className="flex h-1.5 overflow-hidden rounded-full">
+                              <span className="flex-1 bg-cyan" />
+                              <span className="flex-1 bg-purple" />
+                              <span className="flex-1 bg-pink" />
+                            </div>
+                            <div className="space-y-0.5">
+                              <span className="font-medium">{THEMES[id].label}</span>
+                              <p className="text-xs text-muted-foreground">{THEMES[id].description}</p>
+                            </div>
+                          </label>
+                        ))}
+                      </RadioGroup>
                     </div>
 
                     {/* Custom Logo Setting */}
@@ -846,6 +923,79 @@ export const AdminPanel = ({ isOpen, onClose }: AdminPanelProps) => {
                       </div>
                     </div>
 
+                    {/* Background music */}
+                    <div className="p-4 rounded-lg bg-muted/50 space-y-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="music-enabled" className="text-base flex items-center gap-2">
+                            <Music className="w-4 h-4" />
+                            Background Music
+                          </Label>
+                          <p className="text-sm text-muted-foreground">
+                            Play a song while visitors browse their stats, with a speaker button to mute it
+                          </p>
+                        </div>
+                        <Switch
+                          id="music-enabled"
+                          checked={settings.musicEnabled}
+                          onCheckedChange={checked => handleSettingChange('musicEnabled', checked)}
+                        />
+                      </div>
+
+                      <AudioSetting
+                        slot="music"
+                        source={settings.musicSource}
+                        custom={customAudio.music}
+                        onSourceChange={source => handleSettingChange('musicSource', source)}
+                        onCustomChange={(custom, saved) => handleCustomAudioChange('music', custom, saved)}
+                        onPreviewPlay={pauseBackgroundMusic}
+                      />
+
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="music-start-unmuted" className="text-sm">Start Unmuted</Label>
+                          <p className="text-xs text-muted-foreground">
+                            Browsers only allow sound after the visitor's first click or tap, so the music starts then.
+                            Visitors who mute it stay muted.
+                          </p>
+                        </div>
+                        <Switch
+                          id="music-start-unmuted"
+                          checked={settings.musicStartUnmuted}
+                          onCheckedChange={checked => handleSettingChange('musicStartUnmuted', checked)}
+                          disabled={!settings.musicEnabled}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Unwrap sound */}
+                    <div className="p-4 rounded-lg bg-muted/50 space-y-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="unwrap-enabled" className="text-base flex items-center gap-2">
+                            <Gift className="w-4 h-4" />
+                            Unwrap Sound
+                          </Label>
+                          <p className="text-sm text-muted-foreground">
+                            Played when visitors tap to unwrap their top movie and show
+                          </p>
+                        </div>
+                        <Switch
+                          id="unwrap-enabled"
+                          checked={settings.unwrapSoundEnabled}
+                          onCheckedChange={checked => handleSettingChange('unwrapSoundEnabled', checked)}
+                        />
+                      </div>
+
+                      <AudioSetting
+                        slot="unwrap"
+                        source={settings.unwrapSoundSource}
+                        custom={customAudio.unwrap}
+                        onSourceChange={source => handleSettingChange('unwrapSoundSource', source)}
+                        onCustomChange={(custom, saved) => handleCustomAudioChange('unwrap', custom, saved)}
+                      />
+                    </div>
+
                     <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                       <div className="space-y-0.5">
                         <Label htmlFor="normalize-anomalies" className="text-base">Normalize Tautulli Anomalies</Label>
@@ -891,6 +1041,23 @@ export const AdminPanel = ({ isOpen, onClose }: AdminPanelProps) => {
                         id="show-leaderboard"
                         checked={settings.showLeaderboard}
                         onCheckedChange={checked => handleSettingChange('showLeaderboard', checked)}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="show-viewer-rank" className="text-base flex items-center gap-2">
+                          <Medal className="w-4 h-4" />
+                          Show Viewer Ranking
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Tell viewers in the top half how they rank, e.g. "more than 82% of viewers"
+                        </p>
+                      </div>
+                      <Switch
+                        id="show-viewer-rank"
+                        checked={settings.showViewerRank}
+                        onCheckedChange={checked => handleSettingChange('showViewerRank', checked)}
                       />
                     </div>
 
@@ -962,7 +1129,7 @@ export const AdminPanel = ({ isOpen, onClose }: AdminPanelProps) => {
                                     {isEditingPwd ? <div className="flex items-center gap-2">
                                         <Input value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New password" className="h-8 w-28" />
                                         <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleSavePassword(user.user_id)}>
-                                          <Check className="w-4 h-4 text-green-500" />
+                                          <Check className="w-4 h-4 text-green" />
                                         </Button>
                                         <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => {
                                 setEditingUserId(null);
@@ -975,7 +1142,7 @@ export const AdminPanel = ({ isOpen, onClose }: AdminPanelProps) => {
                                           {userPwd?.password || 'Not set'}
                                         </code>
                                         {userPwd && <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleCopyPassword(user.user_id, userPwd.password)}>
-                                            {copiedUserId === user.user_id ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                                            {copiedUserId === user.user_id ? <Check className="w-4 h-4 text-green" /> : <Copy className="w-4 h-4" />}
                                           </Button>}
                                       </div>}
                                   </TableCell>
@@ -1008,7 +1175,7 @@ export const AdminPanel = ({ isOpen, onClose }: AdminPanelProps) => {
                               <Loader2 className="w-3 h-3 animate-spin" />
                               {cacheStatus.phase}
                               {cacheStatus.progress ? cacheStatus.progress.total > 0 ? ` ${cacheStatus.progress.done}/${cacheStatus.progress.total}` : ` (${cacheStatus.progress.done.toLocaleString()})` : ""}
-                            </span> : <span className="text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">Idle</span>)}
+                            </span> : <span className="text-xs bg-green/20 text-green px-2 py-0.5 rounded-full">Idle</span>)}
                       </div>
                       <p className="text-sm text-muted-foreground">
                         Watch history, metadata and streaming locations are cached on the server so reports load instantly.

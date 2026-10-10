@@ -1,9 +1,11 @@
 // Display helpers for Tautulli data. Stats are computed server-side (see src/lib/stats.ts).
 
-// Poster/thumbnail through the server's image proxy
-export const getImageUrl = (thumb: string): string => {
+// Poster/thumbnail through the server's image proxy ("landscape" for episode stills and background art)
+export const getImageUrl = (thumb: string, shape: "poster" | "landscape" = "poster"): string => {
   if (!thumb) return "";
-  return `/api/image?${new URLSearchParams({ thumb })}`;
+  const params = new URLSearchParams({ thumb });
+  if (shape === "landscape") params.set("shape", "landscape");
+  return `/api/image?${params}`;
 };
 
 export const formatDuration = (seconds: number): string => {

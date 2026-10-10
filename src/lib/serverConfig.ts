@@ -4,6 +4,7 @@
 
 import { api } from "@/lib/api";
 import { DEFAULT_ADMIN_SETTINGS, type AdminSettings } from "@/lib/adminStorage";
+import { applyTheme } from "@/lib/applyTheme";
 import type { PublicConfig } from "@/types/api";
 
 let publicConfig: PublicConfig | null = null;
@@ -18,8 +19,10 @@ export const loadPublicConfig = async (): Promise<PublicConfig> => {
       adminPasswordSet: false,
       settings: DEFAULT_ADMIN_SETTINGS,
       plexServerName: null,
+      customAudioVersions: { music: null, unwrap: null },
     };
   }
+  applyTheme(publicConfig.settings.theme);
   return publicConfig;
 };
 
@@ -36,6 +39,7 @@ export const setCachedSettings = (settings: AdminSettings) => {
   if (publicConfig) {
     publicConfig = { ...publicConfig, settings };
   }
+  applyTheme(settings.theme);
 };
 
 // Logo helpers

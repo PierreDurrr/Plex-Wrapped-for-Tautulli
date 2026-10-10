@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { TautulliUser, WrappedStats, StreamingLocation } from "@/types/tautulli";
 import { YearSelector, YearSelection, getDisplayYear, getDefaultYear, toPeriod } from "./YearSelector";
 import { getServerAdminSettings } from "@/lib/serverConfig";
+import { getTheme } from "@/lib/themes";
 import { api, isBuilding } from "@/lib/api";
 import html2canvas from "html2canvas";
 import JSZip from "jszip";
@@ -60,6 +61,8 @@ export const ImageExportDialog = ({
   const renderContainerRef = useRef<HTMLDivElement>(null);
   const slidesContainerRef = useRef<HTMLDivElement>(null);
   const isRenderReadyRef = useRef(false);
+  // The theme's background behind the exported images
+  const exportBg = getTheme(getServerAdminSettings().theme).exportColors.bg;
 
   const toggleUser = (userId: number) => {
     const newSelected = new Set(selectedUserIds);
@@ -145,7 +148,7 @@ export const ImageExportDialog = ({
     await new Promise(resolve => setTimeout(resolve, 300));
 
     const canvas = await html2canvas(element, {
-      backgroundColor: '#0a0a0f',
+      backgroundColor: exportBg,
       scale: 2,
       useCORS: true,
       allowTaint: true,
@@ -193,7 +196,7 @@ export const ImageExportDialog = ({
 
       try {
         const canvas = await html2canvas(slideElement, {
-          backgroundColor: '#0a0a0f',
+          backgroundColor: exportBg,
           scale: 2,
           useCORS: true,
           allowTaint: true,
@@ -642,7 +645,7 @@ export const ImageExportDialog = ({
       {/* Hidden render containers - positioned offscreen but NOT hidden */}
       {renderData && renderMode === 'full' && (
         <div style={{ ...offscreenStyle, width: '800px' }}>
-          <div ref={renderContainerRef} style={{ backgroundColor: '#0a0a0f' }}>
+          <div ref={renderContainerRef} style={{ backgroundColor: exportBg }}>
             <ExportableWrappedReport
               user={renderData.user}
               stats={renderData.stats}
@@ -656,7 +659,7 @@ export const ImageExportDialog = ({
       
       {renderData && renderMode === 'slides' && (
         <div style={{ ...offscreenStyle, width: '540px' }}>
-          <div ref={slidesContainerRef} style={{ backgroundColor: '#0a0a0f' }}>
+          <div ref={slidesContainerRef} style={{ backgroundColor: exportBg }}>
             <ExportableStorySlides
               user={renderData.user}
               stats={renderData.stats}

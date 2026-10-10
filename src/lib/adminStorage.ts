@@ -1,6 +1,11 @@
 // Shared admin settings types (stored server-side in /data/config.json)
 
+import { DEFAULT_THEME, type ThemeId } from "@/lib/themes";
+
 export type AccessMode = "regular" | "discreet" | "plex";
+
+/** A replaceable sound: the bundled file or the uploaded one */
+export type AudioSource = "default" | "custom";
 
 export interface AdminSettings {
   accessMode: AccessMode;
@@ -13,9 +18,16 @@ export interface AdminSettings {
   logoMaxHeight: number; // Max height in pixels for the logo
   enableGeolocation: boolean;
   showLeaderboard: boolean;
+  showViewerRank: boolean; // Tell viewers in the top half how their watch time ranks on the server
   nightlySyncTime: string; // "HH:mm", server timezone
   appName: string; // Installed app (PWA) name; empty = use the title
   currentYearFrom: string; // "MM-DD": from this date on, reports open on the current year instead of the previous one
+  musicEnabled: boolean; // Show the background music button
+  musicSource: AudioSource; // The bundled song or the uploaded one (kept when switching back)
+  musicStartUnmuted: boolean; // Start playing on the visitor's first interaction (unless they muted it before)
+  unwrapSoundEnabled: boolean; // Play a sound when unwrapping the top movie/show
+  unwrapSoundSource: AudioSource;
+  theme: ThemeId; // Colours of the report and the exported images
 }
 
 export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
@@ -29,9 +41,16 @@ export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   logoMaxHeight: 80,
   enableGeolocation: false,
   showLeaderboard: true,
+  showViewerRank: false,
   nightlySyncTime: "03:00",
   appName: "",
   currentYearFrom: "12-01",
+  musicEnabled: true,
+  musicSource: "default",
+  musicStartUnmuted: false,
+  unwrapSoundEnabled: true,
+  unwrapSoundSource: "default",
+  theme: DEFAULT_THEME,
 };
 
 // February allows the 29th; in other years that date simply means March 1st

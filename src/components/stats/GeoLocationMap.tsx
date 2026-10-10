@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl, { type GeoJSONSource, type LngLatLike } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Hand, Loader2, MousePointerClick, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StreamingLocation } from "@/types/tautulli";
 
@@ -14,7 +14,10 @@ interface GeoLocationMapProps {
 
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/dark";
 const SOURCE_ID = "streaming-locations";
-const SPIN_DEGREES_PER_SECOND = 6;
+// The globe sways slowly to each side of the streaming locations (one full sway per period),
+// by a fixed distance on screen so it looks the same at any zoom
+const SWAY_PERIOD_MS = 30000;
+const SWAY_PIXELS = 40;
 // On slow connections the style and first tiles can take a while; after this we show a retry option
 const LOAD_TIMEOUT_MS = 20000;
 
@@ -55,6 +58,33 @@ const hasWebGL = () => {
   } catch {
     return false;
   }
+};
+
+// Degrees of longitude per screen pixel at a zoom level (512px tiles)
+const degreesPerPixel = (zoom: number) => 360 / (512 * 2 ** zoom);
+
+// The session-weighted middle of the streaming locations as [lng, lat]. Averaged on the sphere,
+// so locations on both sides of the date line don't average out to the far side of the world.
+const focusOf = (locations: StreamingLocation[]): [number, number] => {
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  let total = 0;
+  for (const l of locations) {
+    const lat = (l.lat * Math.PI) / 180;
+    const lon = (l.lon * Math.PI) / 180;
+    const weight = Math.max(l.sessionCount, 1);
+    x += weight * Math.cos(lat) * Math.cos(lon);
+    y += weight * Math.cos(lat) * Math.sin(lon);
+    z += weight * Math.sin(lat);
+    total += weight;
+  }
+  // Locations spread evenly around the globe have no meaningful middle: use the busiest one
+  if (Math.hypot(x, y, z) < 0.1 * total) {
+    const busiest = locations.reduce((a, b) => (b.sessionCount > a.sessionCount ? b : a));
+    return [busiest.lon, busiest.lat];
+  }
+  return [(Math.atan2(y, x) * 180) / Math.PI, (Math.atan2(z, Math.hypot(x, y)) * 180) / Math.PI];
 };
 
 const toGeoJSON = (locations: StreamingLocation[]): GeoJSON.FeatureCollection<GeoJSON.Point> => ({
@@ -118,25 +148,37 @@ const GeoLocationMap = ({ locations }: GeoLocationMapProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const locationsRef = useRef(locations);
-  const spinRef = useRef<{ active: boolean }>({ active: false });
+  const swayRef = useRef<{ focus: (center: [number, number]) => void; stop: () => void } | null>(null);
   const [ready, setReady] = useState(false);
   const [unsupported] = useState(() => !hasWebGL());
   const [status, setStatus] = useState<MapStatus>("loading");
   const [errorText, setErrorText] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // Until it's tapped or clicked, a layer over the globe takes the touches, so swiping through
+  // the report scrolls past it instead of turning it. It locks again once scrolled off screen.
+  const [locked, setLocked] = useState(true);
+  const [coarsePointer] = useState(() => window.matchMedia?.("(pointer: coarse)").matches ?? false);
 
   locationsRef.current = locations;
 
+  const unlock = () => {
+    setLocked(false);
+    swayRef.current?.stop();
+    // Keyboard users keep their place: the arrow keys turn the globe
+    mapRef.current?.getCanvas().focus({ preventScroll: true });
+  };
+
   // Initialize the map (again when the user retries)
   useEffect(() => {
-    if (!containerRef.current || mapRef.current || unsupported) return;
+    const container = containerRef.current;
+    if (!container || mapRef.current || unsupported) return;
 
     setStatus("loading");
     setErrorText(null);
     let map: maplibregl.Map;
     try {
       map = new maplibregl.Map({
-        container: containerRef.current,
+        container,
         style: MAP_STYLE,
         center: [0, 20],
         zoom: 1.2,
@@ -213,23 +255,69 @@ const GeoLocationMap = ({ locations }: GeoLocationMapProps) => {
       setStatus("ready");
     });
 
-    // Gentle auto-rotation until the user interacts with the globe
-    const spin = spinRef.current;
-    const stopSpin = () => {
-      spin.active = false;
+    // A slow sway around the streaming locations hints that the globe can be turned. It only
+    // runs while the globe is on screen (so it hasn't drifted off by the time someone scrolls
+    // to it) and stops for good once the user takes over.
+    let swayCenter: [number, number] | null = null;
+    let swayElapsed = 0;
+    let lastFrame: number | null = null;
+    let onScreen = false;
+    let frame: number | null = null;
+    const swayStep = (now: number) => {
+      frame = null;
+      if (!swayCenter || !onScreen) return;
+      if (lastFrame !== null) swayElapsed += now - lastFrame;
+      lastFrame = now;
+      const drift = Math.sin((2 * Math.PI * swayElapsed) / SWAY_PERIOD_MS) * SWAY_PIXELS * degreesPerPixel(map.getZoom());
+      map.jumpTo({ center: [swayCenter[0] + drift, swayCenter[1]] });
+      frame = requestAnimationFrame(swayStep);
     };
-    map.on("mousedown", stopSpin);
-    map.on("touchstart", stopSpin);
-    map.on("wheel", stopSpin);
-    map.on("moveend", () => {
-      if (!spin.active || map.getZoom() > 3) return;
-      const center = map.getCenter();
-      map.easeTo({ center: [center.lng - SPIN_DEGREES_PER_SECOND, center.lat], duration: 1000, easing: (n) => n });
+    const runSway = () => {
+      if (frame !== null || !swayCenter || !onScreen) return;
+      lastFrame = null;
+      frame = requestAnimationFrame(swayStep);
+    };
+    const pauseSway = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null;
+    };
+    const stopSway = () => {
+      swayCenter = null;
+      pauseSway();
+    };
+    swayRef.current = {
+      focus: (center) => {
+        swayCenter = center;
+        swayElapsed = 0;
+        runSway();
+      },
+      stop: stopSway,
+    };
+    const visibility = new IntersectionObserver(
+      ([entry]) => {
+        onScreen = entry.isIntersecting;
+        if (onScreen) {
+          runSway();
+        } else {
+          pauseSway();
+          setLocked(true);
+        }
+      },
+      { threshold: 0.3 }
+    );
+    visibility.observe(container);
+    map.on("mousedown", stopSway);
+    map.on("touchstart", stopSway);
+    // Zoom buttons and keyboard controls: camera moves the user started carry their original event
+    map.on("movestart", (e) => {
+      if (e.originalEvent) stopSway();
     });
 
     return () => {
       window.clearTimeout(loadTimeout);
-      spin.active = false;
+      visibility.disconnect();
+      stopSway();
+      swayRef.current = null;
       map.remove();
       mapRef.current = null;
       setReady(false);
@@ -248,19 +336,20 @@ const GeoLocationMap = ({ locations }: GeoLocationMapProps) => {
     });
     (map.getSource(SOURCE_ID) as GeoJSONSource | undefined)?.setData(data);
 
+    if (locations.length === 0) return;
+    // Zoom to fit every location, centred on where most of the streaming happened
+    const focus = focusOf(locations);
     if (locations.length === 1) {
-      map.jumpTo({ center: [locations[0].lon, locations[0].lat] as LngLatLike, zoom: 4 });
-    } else if (locations.length > 1) {
+      map.jumpTo({ center: focus as LngLatLike, zoom: 4 });
+    } else {
       const bounds = new maplibregl.LngLatBounds();
       locations.forEach((l) => bounds.extend([l.lon, l.lat]));
       map.fitBounds(bounds, { padding: 50, maxZoom: 6, animate: false });
+      map.jumpTo({ center: focus as LngLatLike });
     }
 
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (!reducedMotion && map.getZoom() <= 3) {
-      spinRef.current.active = true;
-      map.fire("moveend");
-    }
+    if (!reducedMotion) swayRef.current?.focus(focus);
   }, [locations, ready]);
 
   if (unsupported) {
@@ -271,9 +360,25 @@ const GeoLocationMap = ({ locations }: GeoLocationMapProps) => {
     );
   }
 
+  const UnlockIcon = coarsePointer ? Hand : MousePointerClick;
+
   return (
-    <div className="relative h-full w-full">
+    // The locked class sits on this wrapper: MapLibre adds its own classes to the map container
+    <div className={`relative h-full w-full${locked ? " pwft-globe-locked" : ""}`}>
       <div ref={containerRef} className="pwft-globe h-full w-full" aria-label="Streaming locations globe" />
+      {status === "ready" && locked && (
+        <button
+          type="button"
+          onClick={unlock}
+          aria-label="Explore the streaming globe"
+          className="absolute inset-0 z-[5] flex items-end justify-center pb-6 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          <span className="flex items-center gap-2 rounded-full border border-border bg-background/70 px-3 py-1.5 text-xs font-medium text-foreground backdrop-blur-sm">
+            <UnlockIcon className="w-3.5 h-3.5 text-cyan" />
+            {coarsePointer ? "Tap to explore" : "Click to explore"}
+          </span>
+        </button>
+      )}
       {status !== "ready" && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted-foreground">
           {status === "loading" ? (

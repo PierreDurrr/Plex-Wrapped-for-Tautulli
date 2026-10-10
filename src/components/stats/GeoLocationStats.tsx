@@ -6,6 +6,7 @@ import { MapPin, Globe, Loader2 } from "lucide-react";
 import { StreamingLocation } from "@/types/tautulli";
 import { generateLocationInsight } from "@/lib/geolocation";
 
+import { VIEWPORT } from "@/lib/motion";
 interface GeoLocationStatsProps {
   locations: StreamingLocation[];
   isLoading?: boolean;
@@ -95,7 +96,7 @@ export const GeoLocationStats = ({ locations, isLoading = false, totalIPs = 0 }:
     <motion.div
       initial={{ opacity: 0, y: 40 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
+      viewport={VIEWPORT}
       transition={{ duration: 0.6 }}
       className="stat-card"
     >
@@ -104,7 +105,7 @@ export const GeoLocationStats = ({ locations, isLoading = false, totalIPs = 0 }:
           <Globe className="w-6 h-6 text-cyan" />
         </div>
         <div>
-          <h3 className="text-2xl font-bold text-foreground">Streaming Globe</h3>
+          <h3 className="font-display text-3xl font-bold tracking-tight text-foreground">Streaming Globe</h3>
           <p className="text-muted-foreground text-sm">Where you've been watching from</p>
         </div>
       </div>
@@ -113,9 +114,9 @@ export const GeoLocationStats = ({ locations, isLoading = false, totalIPs = 0 }:
       <motion.p
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
-        viewport={{ once: true }}
+        viewport={VIEWPORT}
         transition={{ delay: 0.3 }}
-        className="text-lg text-center mb-6 gradient-text font-semibold"
+        className="text-lg text-center mb-6 gradient-value font-semibold"
       >
         {insight}
       </motion.p>
@@ -159,31 +160,31 @@ export const GeoLocationStats = ({ locations, isLoading = false, totalIPs = 0 }:
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+          viewport={VIEWPORT}
           transition={{ delay: 0.4 }}
           className="text-center p-4 rounded-lg bg-secondary/50"
         >
-          <div className="text-3xl font-bold gradient-text">{countries.length}</div>
+          <div className="text-3xl font-bold gradient-value">{countries.length}</div>
           <div className="text-sm text-muted-foreground">{countries.length === 1 ? "Country" : "Countries"}</div>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+          viewport={VIEWPORT}
           transition={{ delay: 0.5 }}
           className="text-center p-4 rounded-lg bg-secondary/50"
         >
-          <div className="text-3xl font-bold gradient-text">{cities.length}</div>
+          <div className="text-3xl font-bold gradient-value">{cities.length}</div>
           <div className="text-sm text-muted-foreground">{cities.length === 1 ? "City" : "Cities"}</div>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+          viewport={VIEWPORT}
           transition={{ delay: 0.6 }}
           className="text-center p-4 rounded-lg bg-secondary/50"
         >
-          <div className="text-3xl font-bold gradient-text">{totalSessions}</div>
+          <div className="text-3xl font-bold gradient-value">{totalSessions}</div>
           <div className="text-sm text-muted-foreground">Sessions</div>
         </motion.div>
       </div>
@@ -199,7 +200,7 @@ export const GeoLocationStats = ({ locations, isLoading = false, totalIPs = 0 }:
               key={`${loc.city}-${loc.country}`}
               initial={{ opacity: 0, x: -20 }}
               whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
+              viewport={VIEWPORT}
               transition={{ delay: 0.7 + i * 0.1 }}
               className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
             >

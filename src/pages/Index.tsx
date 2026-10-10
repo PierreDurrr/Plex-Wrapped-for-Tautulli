@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { WrappedReport } from "@/components/WrappedReport";
-import { ChristmasMusic } from "@/components/ChristmasMusic";
+import { BackgroundMusic } from "@/components/BackgroundMusic";
 import { AdminPanel } from "@/components/AdminPanel";
 import { PlexLogin } from "@/components/PlexLogin";
 import { plexLoginErrorMessage, waitForPlexPin } from "@/lib/plexAuth";
 import { Button } from "@/components/ui/button";
 import { Shield, Sparkles } from "lucide-react";
 import { loadPublicConfig } from "@/lib/serverConfig";
+import { audioUrl } from "@/lib/audio";
 import { api } from "@/lib/api";
+import { AmbientBackground } from "@/components/motion/AmbientBackground";
+import { KineticText } from "@/components/motion/KineticText";
 import type { PublicConfig, SessionInfo } from "@/types/api";
 
 const NO_SESSION: SessionInfo = { viewer: null, isAdmin: false, canViewAnyone: false };
@@ -66,27 +69,41 @@ export default function Index() {
   if (loading || !config) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        Loading Plex Wrapped…
+        <AmbientBackground />
+        <span className="font-display text-xl font-semibold shimmer-text">Loading Plex Wrapped…</span>
       </div>
     );
   }
+
+  // Rendered first in every screen below, so React keeps the same player (and the song keeps playing) when switching screens
+  const music = (
+    <BackgroundMusic
+      src={config.settings.musicEnabled ? audioUrl("music", config.customAudioVersions.music) : null}
+      startUnmuted={config.settings.musicStartUnmuted}
+    />
+  );
 
   // Show setup screen if not configured
   if (!config.configured) {
     return (
       <>
-        <ChristmasMusic />
+        {music}
         <div className="min-h-screen flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-noise pointer-events-none" />
+          <AmbientBackground />
 
           <div className="text-center max-w-md relative z-10">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl gradient-bg mb-6 glow">
               <Sparkles className="w-10 h-10 text-primary" />
             </div>
 
-            <h1 className="text-4xl md:text-5xl font-extrabold mb-3 gradient-text">
-              Plex Wrapped
-            </h1>
+            <KineticText
+              as="h1"
+              text="Plex Wrapped"
+              gradient
+              trigger="mount"
+              delay={0.1}
+              className="font-display text-5xl md:text-6xl font-extrabold tracking-tighter mb-3"
+            />
 
             <p className="text-muted-foreground text-lg mb-8">
               Plex Wrapped is not configured yet
@@ -116,7 +133,7 @@ export default function Index() {
   if (config.settings.accessMode === "plex" && !session.viewer && !session.isAdmin) {
     return (
       <>
-        <ChristmasMusic />
+        {music}
         <PlexLogin
           serverName={config.plexServerName}
           initialError={loginError}
@@ -134,7 +151,7 @@ export default function Index() {
 
   return (
     <>
-      <ChristmasMusic />
+      {music}
       <WrappedReport key={reportKey} publicConfig={config} session={session} onRefresh={refresh} />
     </>
   );
