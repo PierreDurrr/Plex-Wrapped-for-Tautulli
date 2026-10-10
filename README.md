@@ -7,12 +7,14 @@
 <br><br>
 
 A year-in-review wrapped report for your Plex server (Movies and TV Shows), powered by Tautulli data. Self hosted with Docker.<br>
-Beautiful, animated/dynamic statistics and fun facts. With exportable slides for social media sharing. Customizable.
+Beautiful, animated/dynamic statistics and fun facts. With exportable slides for social media sharing.<br>
+Customizable with several themes, own logo, title, etc.
 
-<img src="https://github.com/user-attachments/assets/2b71e3c1-5d84-4e80-96cb-2e32ded3cf4c" width="15%"></img> <img src="https://github.com/user-attachments/assets/017012e4-ae19-43f5-8f2f-d3b7e7ff911e" width="15%"></img> <img src="https://github.com/user-attachments/assets/9d5f2bfe-743d-4e07-b21e-2c3f02b2535e" width="15%"></img> <img src="https://github.com/user-attachments/assets/ec98307f-ff31-47af-aa7d-ee34277e7575" width="15%"></img> <img src="https://github.com/user-attachments/assets/151f7141-2dc2-4aa2-b498-bdc4093666be" width="15%"></img><br>
-<img src="https://github.com/user-attachments/assets/2fa4ba72-d68f-4503-a666-c73b50bc8b31" width="15%"></img> <img src="https://github.com/user-attachments/assets/8129bf9a-3dfa-40ba-840f-29cebd0f1df6" width="15%"></img> <img src="https://github.com/user-attachments/assets/c0a67005-1c9a-40eb-a0a4-5e0acf016e34" width="15%"></img> <img src="https://github.com/user-attachments/assets/4d128df8-3ce4-4a86-ae8a-5aae8eb771c4" width="15%"></img> <img src="https://github.com/user-attachments/assets/0671b81d-01e3-4816-a7c7-5ba43eb31dca" width="15%"></img>
+<img src="https://github.com/user-attachments/assets/6eb01ee8-c0ba-45c2-90be-f999184a668a" width="15%"></img> <img src="https://github.com/user-attachments/assets/a2b30372-c4bd-439e-8dd0-45b45f370b55" width="15%"></img> <img src="https://github.com/user-attachments/assets/df383ceb-0f11-4639-92d0-9de40ef96272" width="15%"></img> <img src="https://github.com/user-attachments/assets/6ca9787a-2b33-4625-b9fc-44ec1adce211" width="15%"></img>
+<img src="https://github.com/user-attachments/assets/53461778-9be1-4b8a-a1d0-e915c9e810a9" width="15%"></img><br>
+<img src="https://github.com/user-attachments/assets/a7573bf9-0c51-4df5-9336-6e6efd030a26" width="15%"></img> <img src="https://github.com/user-attachments/assets/70340edf-6444-45c0-a0dd-4a1c682d49e5" width="15%"></img> <img src="https://github.com/user-attachments/assets/4c330b50-5e07-4bd0-b875-8ebfa8896369" width="15%"></img> <img src="https://github.com/user-attachments/assets/35327d50-3bb7-465b-9ed6-3566fd7f8fba" width="15%"></img> <img src="https://github.com/user-attachments/assets/4db2179c-0c29-4658-904c-fb4588b1de43" width="15%"></img>
 
-A few examples of what it looks like on mobile:<br>
+Example of what it looks like on mobile:<br>
 <img src="https://github.com/user-attachments/assets/31ba5ac0-735e-4706-860b-ac57c6329121" width="25%"></img>
 
 
@@ -51,8 +53,9 @@ Choose how visitors reach their stats in the Admin Panel (`Settings` tab):
 **Allow 'All Users' Stats** (Discreet Mode and Plex Login): lets visitors switch between their own stats and everyone's combined stats. In Discreet Mode the "All Users" report also loads when visiting the site.
 
 ### Customization
+<img width="1800" height="337" alt="Image" src="https://github.com/user-attachments/assets/1c62a848-e901-434d-9777-ccdfa3033af3" />
 
-- **Theme:** The colours of the report and the export slides. Choose **Default**, **Plex Gold**, **Midnight Frost**, **VHS Rewind** and **Rental Night**.
+- **Theme:** Default, Plex Gold, Midnight Frost, VHS Rewind and Rental Night.
 - **Custom Logo:** Upload your custom logo to be used in reports and export slides. You can adjust the size with the slider.
 - **Custom Title:** Use a custom title instead of "Plex Wrapped".
 - **Installable App:** Set the name and icon the app gets when visitors install it (see below).
@@ -97,9 +100,6 @@ In the Admin Panel you can export individual user reports.<br>
 - `Story Slides` exports nine 9:16 slides for social media reels.
 - You can select multiple users at a time.
 - Users will see an `Export Slides` button at the bottom of the web version of their wrapped report to quickly export their own slides.
-
-<img width="815" height="686" alt="Image" src="https://github.com/user-attachments/assets/cbc9bc2f-7676-41bd-96a9-781eeb9a2f6b" />
-
 
 ### ⚠️ **Do you Need Help or have Feedback?**
 - Join the [Discord](https://discord.gg/VBNUJd7tx3).
