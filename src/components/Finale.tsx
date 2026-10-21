@@ -5,22 +5,20 @@ import { KineticText } from "@/components/motion/KineticText";
 import { useMagnetic } from "@/hooks/use-magnetic";
 import { fireConfetti } from "@/lib/confetti";
 import { EASE_OUT_EXPO, VIEWPORT } from "@/lib/motion";
+import { t } from "@/lib/i18n";
 
 interface FinaleProps {
-  /** The viewer's name, or null for everyone's report */
   name: string | null;
   showExport: boolean;
   isExporting: boolean;
   onExport: () => void;
 }
 
-/** The end of the report: "That's a wrap", a confetti send-off and the slide export */
 export const Finale = ({ name, showExport, isExporting, onExport }: FinaleProps) => {
   const headlineRef = useRef<HTMLDivElement>(null);
   const inView = useInView(headlineRef, { once: true, amount: 0.6 });
   const magnet = useMagnetic(10);
 
-  // Two confetti cannons, once, when the headline comes into view
   useEffect(() => {
     if (!inView) return;
     const timer = window.setTimeout(() => {
@@ -37,7 +35,7 @@ export const Finale = ({ name, showExport, isExporting, onExport }: FinaleProps)
       <div ref={headlineRef}>
         <KineticText
           as="h2"
-          text="That's a wrap."
+          text={t("app.finaleWrap")}
           gradient
           className="font-display text-5xl md:text-7xl font-extrabold tracking-tighter leading-none"
         />
@@ -48,7 +46,7 @@ export const Finale = ({ name, showExport, isExporting, onExport }: FinaleProps)
           transition={{ delay: 0.5, duration: 0.8, ease: EASE_OUT_EXPO }}
           className="mt-5 text-lg md:text-xl text-muted-foreground"
         >
-          {name ? `See you next year, ${name}.` : "See you next year."}
+          {name ? t("app.finaleNextYear", { name }) : t("app.finaleNextYearGeneric")}
         </motion.p>
       </div>
 
@@ -66,9 +64,8 @@ export const Finale = ({ name, showExport, isExporting, onExport }: FinaleProps)
             disabled={isExporting}
             style={magnet.style}
             {...magnet.handlers}
-            className="group relative inline-flex overflow-hidden rounded-full p-[2px] shadow-[0_10px_40px_-10px_hsl(var(--purple)/0.8)] outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-4 focus-visible:ring-offset-background disabled:cursor-wait disabled:opacity-80"
+            className="group relative inline-flex overflow-hidden rounded-full p-[2px] shadow-[0_10px_40px_-10px_hsl(var(--purple)/0.8)] outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            {/* The ring: brand colours chasing around the button */}
             <span
               aria-hidden
               className="absolute -inset-full animate-spin-slow"
@@ -81,21 +78,21 @@ export const Finale = ({ name, showExport, isExporting, onExport }: FinaleProps)
               {isExporting ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Exporting...
+                  {t("app.exportingSlides")}
                 </>
               ) : (
                 <>
                   <Download className="w-5 h-5 transition-transform group-hover:translate-y-0.5" />
-                  Export Slides
+                  {t("app.exportSlides")}
                 </>
               )}
             </span>
           </motion.button>
-          <p className="text-sm text-muted-foreground mt-4">Download your wrapped report as shareable story slides</p>
+          <p className="text-sm text-muted-foreground mt-4">{t("app.downloadWrapped")}</p>
         </motion.div>
       )}
 
-      <p className="text-sm text-muted-foreground/50 mt-14">Powered by Tautulli</p>
+      <p className="text-sm text-muted-foreground/50 mt-14">{t("app.poweredByTautulli")}</p>
     </footer>
   );
 };

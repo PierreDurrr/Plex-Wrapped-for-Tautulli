@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { AmbientBackground } from "@/components/motion/AmbientBackground";
 import { KineticText } from "@/components/motion/KineticText";
 import type { PublicConfig, SessionInfo } from "@/types/api";
+import { t } from "@/lib/i18n";
 
 const NO_SESSION: SessionInfo = { viewer: null, isAdmin: false, canViewAnyone: false };
 
@@ -34,7 +35,6 @@ export default function Index() {
       await refresh();
       setLoading(false);
 
-      // Returning from a Plex sign-in redirect (?plexPin=<id>)
       const params = new URLSearchParams(window.location.search);
       const pin = Number(params.get("plexPin"));
       if (!pin) return;
@@ -70,12 +70,11 @@ export default function Index() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <AmbientBackground />
-        <span className="font-display text-xl font-semibold shimmer-text">Loading Plex Wrapped…</span>
+        <span className="font-display text-xl font-semibold shimmer-text">{t("app.loading")}</span>
       </div>
     );
   }
 
-  // Rendered first in every screen below, so React keeps the same player (and the song keeps playing) when switching screens
   const music = (
     <BackgroundMusic
       src={config.settings.musicEnabled ? audioUrl("music", config.customAudioVersions.music) : null}
@@ -83,7 +82,6 @@ export default function Index() {
     />
   );
 
-  // Show setup screen if not configured
   if (!config.configured) {
     return (
       <>
@@ -105,9 +103,7 @@ export default function Index() {
               className="font-display text-5xl md:text-6xl font-extrabold tracking-tighter mb-3"
             />
 
-            <p className="text-muted-foreground text-lg mb-8">
-              Plex Wrapped is not configured yet
-            </p>
+            <p className="text-muted-foreground text-lg mb-8">{t("app.notConfigured")}</p>
 
             <Button
               size="lg"
@@ -115,12 +111,10 @@ export default function Index() {
               className="bg-gradient-to-r from-cyan to-pink hover:opacity-90 transition-opacity"
             >
               <Shield className="w-5 h-5 mr-2" />
-              Open Admin Panel
+              {t("app.openAdmin")}
             </Button>
 
-            <p className="text-sm text-muted-foreground mt-6">
-              Server administrators can configure Tautulli connection
-            </p>
+            <p className="text-sm text-muted-foreground mt-6">{t("app.serverAdministrators")}</p>
           </div>
         </div>
 
@@ -129,7 +123,6 @@ export default function Index() {
     );
   }
 
-  // Plex Login mode: sign in first (admins are let through)
   if (config.settings.accessMode === "plex" && !session.viewer && !session.isAdmin) {
     return (
       <>
@@ -146,7 +139,6 @@ export default function Index() {
     );
   }
 
-  // Remount the report whenever who is viewing (or how) changes, so no state leaks between sessions
   const reportKey = [config.settings.accessMode, session.viewer?.kind, session.viewer?.userId, session.isAdmin, session.canViewAnyone].join(":");
 
   return (

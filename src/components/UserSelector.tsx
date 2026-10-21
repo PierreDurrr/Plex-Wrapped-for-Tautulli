@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import { TautulliUser } from "@/types/tautulli";
 import {
   Select,
@@ -23,10 +24,10 @@ export const UserSelector = ({ users, selectedUserId, onSelectUser }: UserSelect
         onValueChange={(value) => onSelectUser(value === "all" ? null : parseInt(value))}
       >
         <SelectTrigger className="w-[200px] bg-card border-border">
-          <SelectValue placeholder="Select user" />
+          <SelectValue placeholder={t("app.selectUser")} />
         </SelectTrigger>
         <SelectContent className="bg-card border-border">
-          <SelectItem value="all">All Users</SelectItem>
+          <SelectItem value="all">{t("app.allUsers")}</SelectItem>
           {users.map((user) => (
             <SelectItem key={user.user_id} value={user.user_id.toString()}>
               {user.friendly_name || user.username}

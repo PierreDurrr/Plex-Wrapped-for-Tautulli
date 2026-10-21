@@ -4,13 +4,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { api, ApiError } from "@/lib/api";
 import { toast } from "sonner";
+import { t } from "@/lib/i18n";
 
 interface UsernameInputProps {
   onSelectUser: (userId: number) => void;
 }
 
-// Discreet mode: users type their exact username (and password, if enabled).
-// Both are checked by the server; the user list never reaches the browser.
 export const UsernameInput = ({ onSelectUser }: UsernameInputProps) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -19,13 +18,12 @@ export const UsernameInput = ({ onSelectUser }: UsernameInputProps) => {
 
   const handleUsernameSubmit = async () => {
     if (!username.trim()) {
-      toast.error("Please enter a username");
+      toast.error(t("app.usernameRequired"));
       return;
     }
 
-    // Prevent "user" as username in discreet mode
     if (username.trim().toLowerCase() === "user") {
-      toast.error("Invalid username. Please enter a specific user.");
+      toast.error(t("app.invalidUsername"));
       return;
     }
 
@@ -39,7 +37,7 @@ export const UsernameInput = ({ onSelectUser }: UsernameInputProps) => {
         setUsername("");
       }
     } catch (error) {
-      toast.error(error instanceof ApiError && error.status === 404 ? "User not found" : (error as Error).message);
+      toast.error(error instanceof ApiError && error.status === 404 ? t("app.userNotFound") : (error as Error).message);
     } finally {
       setBusy(false);
     }
@@ -53,7 +51,7 @@ export const UsernameInput = ({ onSelectUser }: UsernameInputProps) => {
       onSelectUser(matchedUser.userId);
       handleClear();
     } catch (error) {
-      toast.error(error instanceof ApiError && error.status === 401 ? "Incorrect password" : (error as Error).message);
+      toast.error(error instanceof ApiError && error.status === 401 ? t("app.incorrectPassword") : (error as Error).message);
       handleClear();
     } finally {
       setBusy(false);
@@ -74,7 +72,7 @@ export const UsernameInput = ({ onSelectUser }: UsernameInputProps) => {
           <Input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="Enter username"
+            placeholder={t("app.enterUsernamePlaceholder")}
             className="bg-card border-border"
             onKeyDown={(e) => e.key === "Enter" && handleUsernameSubmit()}
             disabled={Boolean(matchedUser) || busy}
@@ -95,7 +93,7 @@ export const UsernameInput = ({ onSelectUser }: UsernameInputProps) => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={`Password for ${matchedUser.friendlyName}`}
+              placeholder={t("app.passwordFor", { name: matchedUser.friendlyName })}
               className="bg-card border-border"
               onKeyDown={(e) => e.key === "Enter" && handlePasswordSubmit()}
               autoFocus
